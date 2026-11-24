@@ -5,6 +5,7 @@ from datetime import datetime
 from .customers import read_customers_from_csv
 from .products import read_products_from_csv, save_products_to_csv
 
+
 def read_orders_from_csv(file_path):
     orders = []
     try:
@@ -41,7 +42,7 @@ def create_order(file_path, customer_file_path, product_file_path, order_id, cus
     except ValueError:
         raise ValueError("Date must be in YYYY-MM-DD format.")
    
-    allowed_statuses = ['Pending', 'Processing', 'Completed', 'Cancelled']
+    allowed_statuses = ['Pending']
 
     if status not in allowed_statuses:
         raise ValueError("Invalid order status.")
@@ -105,3 +106,59 @@ def create_order(file_path, customer_file_path, product_file_path, order_id, cus
         raise
         
     return order
+
+def update_order_status(file_path, order_id, new_status):
+    orders = read_orders_from_csv(file_path)
+    allowed_statuses = ['Pending', 'Processing', 'Completed', 'Cancelled']
+    order_found = False
+    
+    for order in orders:
+        if order['order_id'] == order_id:
+            if order['status'] == 'Cancelled' or  order['status'] == 'Completed':
+                raise ValueError("Cannot update the status of a cancelled order or completed order.")
+            
+            if new_status not in allowed_statuses or new_status == 'Cancelled':
+                raise ValueError("Invalid order status.")
+
+            order['status'] = new_status
+            order_found = True
+
+    if not order_found:
+        raise ValueError(f"Order with ID {order_id} not found.")
+
+    save_orders_to_csv(orders, file_path)
+
+def cancel_order(file_path, order_id, product_file_path):
+    orders = read_orders_from_csv(file_path)
+    products = read_products_from_csv(product_file_path)
+    original_orders = copy.deepcopy(orders)
+    original_products = copy.deepcopy(products)
+    order_found = False
+
+    for order in orders:
+        if order['order_id'] == order_id:
+            if order['status'] == 'Cancelled':
+                raise ValueError("Order is already cancelled.")
+            if order['status'] == 'Completed':
+                raise ValueError("Cannot cancel a completed order.")
+
+            product = next((p for p in products if p['product_id'] == order['product_id']), None)
+            if not product:
+                raise ValueError("Product not found.")
+            product['quantity'] = int(product['quantity']) + int(order['quantity'])
+
+            order['status'] = 'Cancelled'
+            order_found = True
+
+    if not order_found:
+        raise ValueError(f"Order with ID {order_id} not found.")
+
+    try:
+        save_orders_to_csv(orders, file_path)
+        save_products_to_csv(products, product_file_path)
+    except Exception:
+        save_orders_to_csv(original_orders, file_path)
+        save_products_to_csv(original_products, product_file_path)
+        raise
+
+    
